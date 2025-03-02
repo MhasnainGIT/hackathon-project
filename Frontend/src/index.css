@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f7fafc;
+  color: #2d3748;
+}
+
+.btn-blue { @apply bg-blue-500 hover:bg-blue-600; }
+.btn-green { @apply bg-green-500 hover:bg-green-600; }
+.btn-yellow { @apply bg-yellow-500 hover:bg-yellow-600; }
+.btn-purple { @apply bg-purple-500 hover:bg-purple-600; }
+.btn-red { @apply bg-red-500 hover:bg-red-600; }
+.btn-gray { @apply bg-gray-500 hover:bg-gray-600; }
+
+.alert-warning { @apply text-yellow-800 bg-yellow-100; }
+.alert-error { @apply text-red-800 bg-red-100; }
+
+.input, .file-input { @apply border-gray-300 bg-white text-gray-800; }
+.modal-overlay { @apply fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50; }
+.modal-box { @apply bg-white p-4 rounded-lg shadow-md max-w-2xl mx-auto mt-20 max-h-[80vh] border border-gray-200; }
