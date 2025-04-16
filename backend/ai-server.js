@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const port = 5000;
+const port = 5001;
 app.use(express.json());
 
 app.post('/predict', (req, res) => {
@@ -11,6 +11,6 @@ app.post('/predict', (req, res) => {
   res.json(prediction);
 });
 
-app.listen(5000, () => console.log(`AI Mock Server running on port ${port}`));
+app.listen(5001, () => console.log(`AI Mock Server running on port ${port}`));
 
 // To run: node ai-server.js in backend/

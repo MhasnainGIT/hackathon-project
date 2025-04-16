@@ -6,6 +6,8 @@ const admin = require('firebase-admin');
 const { Server } = require('socket.io');
 const wearableService = require('./services/wearable'); // Import wearable service
 const authRoutes = require('./routes/auth');
+const communityRoutes = require('./routes/community'); // New route for community
+const patientsRoutes = require('./routes/patients'); // New route for patients
 const { mongoUri, redisUrl, firebaseConfig } = require('./config');
 const cors = require('cors');
 
@@ -86,6 +88,11 @@ checkPort(PORT)
     app.get('/', (req, res) => {
       res.status(200).send('HealthSync AI Backend is running');
     });
+
+    // Routes
+    app.use('/auth', authRoutes);
+    app.use('/api/community', communityRoutes); // Use community routes
+    app.use('/api/patients', patientsRoutes); // Use patients routes
 
     // Socket.IO event handlers
     io.on('connection', (socket) => {
@@ -189,9 +196,6 @@ checkPort(PORT)
 
       socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
     });
-
-    // Routes
-    app.use('/auth', authRoutes);
 
     // Start wearable simulation after server and io are fully initialized
     wearableService.startSimulation(io, redisClient, admin).catch(err => {

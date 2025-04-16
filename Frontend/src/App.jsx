@@ -1,31 +1,27 @@
+// src/App.jsx
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import Login from './components/Login';
+import { I18nextProvider } from 'react-i18next';
+import i18n from './i18n';
 import Dashboard from './components/Dashboard';
+import Login from './components/Login';
 import Register from './components/Register';
-import { useTranslation } from 'react-i18next';
+import ErrorBoundary from './components/ErrorBoundary'; // Import ErrorBoundary
 
 function App() {
-  const { i18n } = useTranslation();
-  const [token, setToken] = useState(localStorage.getItem('token') || null);
-
-  useEffect(() => {
-    console.log('App mounted, token:', token);
-    const storedToken = localStorage.getItem('token');
-    if (storedToken && !token) {
-      setToken(storedToken);
-    }
-  }, [token]);
-
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={token ? <Dashboard token={token} /> : <Login />} />
-        <Route path="/" element={token ? <Dashboard token={token} /> : <Login />} />
-      </Routes>
-    </Router>
+    <I18nextProvider i18n={i18n}>
+      <Router>
+        <ErrorBoundary> {/* Add ErrorBoundary here */}
+          <Routes>
+            <Route path="/dashboard" element={<Dashboard token={localStorage.getItem('token')} />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/" element={<Login />} />
+          </Routes>
+        </ErrorBoundary>
+      </Router>
+    </I18nextProvider>
   );
 }
 

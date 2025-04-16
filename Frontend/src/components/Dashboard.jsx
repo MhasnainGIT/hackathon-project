@@ -53,45 +53,27 @@ function Dashboard({ token }) {
   });
   const [leaderboard, setLeaderboard] = useState([]);
   const [healthForecast, setHealthForecast] = useState({});
-  const [availableScheme, setAvailableScheme] = useState(null);
+  const [availableScheme, setAvailableScheme] = useState({});
   const [topDoctors, setTopDoctors] = useState({
-    India: [
-      { username: 'Dr. Rajesh Kumar', experienceYears: 15, specialties: ['Cardiology', 'Internal Medicine'], location: 'India', rating: 4.8 },
-      { username: 'Dr. Priya Sharma', experienceYears: 12, specialties: ['Pediatrics', 'Nutrition'], location: 'India', rating: 4.7 },
-      { username: 'Dr. Amit Patel', experienceYears: 10, specialties: ['Neurology'], location: 'India', rating: 4.6 },
-      { username: 'Dr. Neha Singh', experienceYears: 8, specialties: ['Dermatology'], location: 'India', rating: 4.5 },
-      { username: 'Dr. Vikram Jain', experienceYears: 7, specialties: ['Orthopedics'], location: 'India', rating: 4.4 },
-    ],
-    USA: [
-      { username: 'Dr. John Smith', experienceYears: 20, specialties: ['Cardiology', 'Surgery'], location: 'USA', rating: 4.9 },
-      { username: 'Dr. Emily Davis', experienceYears: 18, specialties: ['Pediatrics'], location: 'USA', rating: 4.8 },
-      { username: 'Dr. Michael Brown', experienceYears: 15, specialties: ['Neurology'], location: 'USA', rating: 4.7 },
-      { username: 'Dr. Sarah Johnson', experienceYears: 13, specialties: ['Oncology'], location: 'USA', rating: 4.6 },
-      { username: 'Dr. Robert Lee', experienceYears: 10, specialties: ['Radiology'], location: 'USA', rating: 4.5 },
-    ],
-    UK: [
-      { username: 'Dr. Alice Turner', experienceYears: 16, specialties: ['Cardiology'], location: 'UK', rating: 4.8 },
-      { username: 'Dr. James Wilson', experienceYears: 14, specialties: ['Pediatrics'], location: 'UK', rating: 4.7 },
-      { username: 'Dr. Olivia Clark', experienceYears: 12, specialties: ['Neurology'], location: 'UK', rating: 4.6 },
-      { username: 'Dr. Henry Moore', experienceYears: 9, specialties: ['Dermatology'], location: 'UK', rating: 4.5 },
-      { username: 'Dr. Sophia Evans', experienceYears: 7, specialties: ['Orthopedics'], location: 'UK', rating: 4.4 },
-    ],
+    India: [],
+    USA: [],
+    UK: [],
   });
   const [selectedCommunity, setSelectedCommunity] = useState(null);
-  const [posts, setPosts] = useState([
-    { id: 'post1', author: 'Dr. Rajesh Kumar', content: 'New insights on heart health management', imageUrl: 'https://via.placeholder.com/300x200?text=Heart+Health', likes: 15, comments: ['Great post!', 'Very informative'], timestamp: new Date().toISOString() },
-    { id: 'post2', author: 'Dr. Emily Davis', content: 'Pediatric care tips for flu season', imageUrl: 'https://via.placeholder.com/300x200?text=Pediatric+Care', likes: 12, comments: ['Helpful!', 'Thanks for sharing'], timestamp: new Date().toISOString() },
-    { id: 'post3', author: 'Dr. Alice Turner', content: 'Latest advancements in neurology', likes: 20, comments: ['Excellent research!', 'Very detailed'], timestamp: new Date().toISOString() },
-    { id: 'post4', author: 'Dr. Priya Sharma', content: 'Nutritional advice for chronic diseases', imageUrl: 'https://via.placeholder.com/300x200?text=Nutrition+Tips', likes: 18, comments: ['Useful tips!', 'Great content'], timestamp: new Date().toISOString() },
-  ]);
+  const [posts, setPosts] = useState([]);
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostImage, setNewPostImage] = useState(null);
   const [isCommunityOpen, setIsCommunityOpen] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   const alarmSound = useRef(new Audio('https://www.myinstants.com/media/sounds/alarm-clock-short-32064.mp3'));
   const localVideoRef = useRef();
   const remoteVideoRef = useRef();
+  const plotlyChartRef = useRef(null); // Ref for the Plotly chart element
   const { transcript, resetTranscript, listening, browserSupportsSpeechRecognition } = useSpeechRecognition();
+
+  // Declare latestVitalsForSelected only once at the top level
+  const latestVitalsForSelected = selectedPatient ? patientsData[selectedPatient]?.[patientsData[selectedPatient].length - 1] || {} : {};
 
   useEffect(() => {
     if (!token) {
@@ -120,18 +102,37 @@ function Dashboard({ token }) {
         }
       } catch (error) {
         console.error('Error fetching initial vitals:', error);
+        setError(`Error fetching initial vitals: ${error.message}`);
       } finally {
         if (mounted) setIsLoading(false);
       }
     };
     fetchInitialData();
 
+    // Fetch data only once on mount, avoid re-fetching on state changes
+    const fetchAllData = async () => {
+      try {
+        await Promise.all([
+          fetchHealthForecast(),
+          fetchAvailableScheme(),
+          fetchCommunity('Global', null),
+          fetchCommunity('Local', 'India'),
+          fetchTopDoctors(),
+        ]);
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+        setError(`Error fetching initial data: ${error.message}`);
+      }
+    };
+    fetchAllData();
+
     const fetchData = async (fn, ...args) => {
       try {
         const response = await fn(...args);
-        if (mounted) return response.data;
+        return response.data;
       } catch (error) {
         console.error(`Error in ${fn.name}:`, error);
+        setError(`Error in ${fn.name}: ${error.message}`);
         return null;
       }
     };
@@ -150,7 +151,6 @@ function Dashboard({ token }) {
         }
       }
     };
-    fetchHealthForecast();
 
     const fetchAvailableScheme = async () => {
       const patientIds = ['patient1', 'patient2', 'patient3'];
@@ -166,7 +166,6 @@ function Dashboard({ token }) {
         }
       }
     };
-    fetchAvailableScheme();
 
     const fetchCommunity = async (type, location) => {
       const data = await fetchData(
@@ -176,12 +175,13 @@ function Dashboard({ token }) {
         })
       );
       if (mounted && data) {
-        setSelectedCommunity(data);
-        fetchPosts(data.id);
+        setSelectedCommunity(prev => ({
+          ...prev,
+          [type + (location ? `_${location}` : '')]: data,
+        }));
+        fetchPosts(data.id || (type === 'Global' ? 'global1' : `local_${location}`));
       }
     };
-    fetchCommunity('Global', null);
-    fetchCommunity('Local', 'India');
 
     const fetchPosts = async (communityId) => {
       const data = await fetchData(
@@ -190,7 +190,7 @@ function Dashboard({ token }) {
           timeout: 10000,
         })
       );
-      if (mounted && data) setPosts(prev => [...prev, ...data].slice(0, 10));
+      if (mounted && data) setPosts(data);
     };
 
     const fetchTopDoctors = async () => {
@@ -201,15 +201,9 @@ function Dashboard({ token }) {
         })
       );
       if (mounted && data) {
-        const regionDoctors = {
-          India: data.filter(d => d.location === 'India').slice(0, 5),
-          USA: data.filter(d => d.location === 'USA').slice(0, 5),
-          UK: data.filter(d => d.location === 'UK').slice(0, 5),
-        };
-        setTopDoctors(regionDoctors);
+        setTopDoctors(data);
       }
     };
-    fetchTopDoctors();
 
     const handleConnect = () => console.log('Connected to backend on port 5000');
     const handleDisconnect = () => {
@@ -223,7 +217,7 @@ function Dashboard({ token }) {
         setTimeout(() => socket.connect(), 2000);
       }
     };
-    const handleVitalsUpdate = async (vitals) => {
+    const handleVitalsUpdate = (vitals) => {
       if (mounted) {
         setPatientsData(prev => ({
           ...prev,
@@ -296,7 +290,12 @@ function Dashboard({ token }) {
       socket.off('connectionUpdate', handleConnectionUpdate);
       socket.disconnect();
     };
-  }, [thresholds, token, selectedCommunity, isCommunityOpen]);
+  }, [token]); // Only depend on token to avoid re-runs on state changes
+
+  useEffect(() => {
+    // Update latestVitalsForSelected when patientsData or selectedPatient changes
+    // This ensures it’s reactive but doesn’t cause re-renders unless necessary
+  }, [patientsData, selectedPatient]);
 
   useEffect(() => {
     return () => {
@@ -305,12 +304,13 @@ function Dashboard({ token }) {
       setSeriousAlerts([]);
       setSelectedPatient(null);
       setHealthForecast({});
-      setAvailableScheme(null);
+      setAvailableScheme({});
       setTopDoctors({});
       setSelectedCommunity(null);
       setPosts([]);
       setNewPostContent('');
       setNewPostImage(null);
+      setError('');
     };
   }, []);
 
@@ -404,7 +404,7 @@ function Dashboard({ token }) {
       alert(`${t('detailsFor')} ${patientId}:\n${JSON.stringify(response.data, null, 2)}`);
     } catch (error) {
       console.error('Error fetching vitals:', error);
-      alert(`${t('errorFetching')} ${patientId}: ${error.response?.data?.message || error.message}`);
+      setError(`Error fetching vitals for ${patientId}: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -421,8 +421,6 @@ function Dashboard({ token }) {
     setPatientScores(prev => ({ ...prev, [username]: Math.max((prev[username] || 100) + points, 0) }));
   };
 
-  const latestVitalsForSelected = selectedPatient ? patientsData[selectedPatient]?.[patientsData[selectedPatient].length - 1] || {} : {};
-
   const handleCreatePost = async () => {
     if (newPostContent.trim() || newPostImage) {
       setIsLoading(true);
@@ -436,16 +434,22 @@ function Dashboard({ token }) {
         comments: [],
         timestamp: new Date().toISOString(),
       };
-      await socket.emit('createPost', {
-        author: 'doc1',
-        content: newPostContent,
-        imageUrl: newPostImage ? URL.createObjectURL(newPostImage) : null,
-        communityId: community,
-      });
-      setPosts(prev => [newPost, ...prev].slice(0, 10));
-      setNewPostContent('');
-      setNewPostImage(null);
-      setIsLoading(false);
+      try {
+        await socket.emit('createPost', {
+          author: 'doc1',
+          content: newPostContent,
+          imageUrl: newPostImage ? URL.createObjectURL(newPostImage) : null,
+          communityId: community,
+        });
+        setPosts(prev => [newPost, ...prev].slice(0, 10));
+        setNewPostContent('');
+        setNewPostImage(null);
+      } catch (error) {
+        console.error('Error creating post:', error);
+        setError(`Error creating post: ${error.message}`);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -526,60 +530,75 @@ function Dashboard({ token }) {
 
   const fetchCommunity = async (type, location) => {
     try {
+      setIsLoading(true);
       const response = await axios.get(`http://localhost:5000/api/community?type=${type}&location=${location || ''}`, {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 10000,
       });
-      setSelectedCommunity(response.data);
-      fetchPosts(response.data.id);
+      setSelectedCommunity(prev => ({
+        ...prev,
+        [type + (location ? `_${location}` : '')]: response.data,
+      }));
+      fetchPosts(response.data.id || (type === 'Global' ? 'global1' : `local_${location}`));
     } catch (error) {
       console.error('Error fetching community:', error);
+      setError(`Error fetching community: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const fetchPosts = async (communityId) => {
     try {
+      setIsLoading(true);
       const response = await axios.get(`http://localhost:5000/api/community/posts?communityId=${communityId}&limit=10`, {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 10000,
       });
-      setPosts(prev => [...prev, ...response.data].slice(0, 10));
+      setPosts(response.data);
     } catch (error) {
       console.error('Error fetching posts:', error);
+      setError(`Error fetching posts: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const fetchAvailableScheme = async (patientId) => {
     try {
+      setIsLoading(true);
       const response = await axios.get(`http://localhost:5000/api/patients/${patientId}/schemes`, {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 10000,
       });
-      setAvailableScheme(response.data);
+      setAvailableScheme(prev => ({ ...prev, [patientId]: response.data }));
     } catch (error) {
       console.error('Error fetching scheme:', error);
+      setError(`Error fetching scheme for ${patientId}: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const fetchTopDoctors = async () => {
     try {
+      setIsLoading(true);
       const response = await axios.get('http://localhost:5000/api/community/top-doctors?limit=15', {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 10000,
       });
-      const regionDoctors = {
-        India: response.data.filter(d => d.location === 'India').slice(0, 5),
-        USA: response.data.filter(d => d.location === 'USA').slice(0, 5),
-        UK: response.data.filter(d => d.location === 'UK').slice(0, 5),
-      };
-      setTopDoctors(regionDoctors);
+      setTopDoctors(response.data);
     } catch (error) {
       console.error('Error fetching top doctors:', error);
+      setError(`Error fetching top doctors: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const setupTelehealth = async () => {
     try {
+      setIsLoading(true);
       const room = await TwilioVideo.connect(token, { room: `patient-${selectedPatient}` });
       room.localParticipant.videoTracks.forEach(track => {
         localVideoRef.current.srcObject = track.mediaStream;
@@ -595,11 +614,15 @@ function Dashboard({ token }) {
       });
     } catch (error) {
       console.error('Telehealth error:', error);
+      setError(`Telehealth error: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  // Updated useEffect for Plotly chart with ref and existence check
   useEffect(() => {
-    if (Object.keys(patientsData).length > 0) {
+    if (Object.keys(patientsData).length > 0 && plotlyChartRef.current) {
       const trace1 = {
         x: Object.values(patientsData).flat().map(v => new Date(v.timestamp)),
         y: Object.values(patientsData).flat().map(v => v.heartRate),
@@ -624,12 +647,55 @@ function Dashboard({ token }) {
         paper_bgcolor: '#1f2937',
         font: { color: '#D1D5DB', family: 'Inter' },
       };
-      Plotly.newPlot('plotlyChart', [trace1, trace2], layout, { displayModeBar: false, showLegend: false });
+      Plotly.newPlot(plotlyChartRef.current, [trace1, trace2], layout, { displayModeBar: false, showLegend: false });
     }
-  }, [patientsData, t]);
+  }, [patientsData, t]); // Only re-run when patientsData or t changes
+
+  const handleLikePost = async (postId) => {
+    setIsLoading(true);
+    try {
+      const updatedPosts = posts.map(post => 
+        post.id === postId ? { ...post, likes: post.likes + 1 } : post
+      );
+      setPosts(updatedPosts);
+      socket.emit('likePost', { postId, user: 'doc1' });
+    } catch (error) {
+      console.error('Error liking post:', error);
+      setError(`Error liking post: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCommentPost = async (postId, comment) => {
+    setIsLoading(true);
+    try {
+      const updatedPosts = posts.map(post => 
+        post.id === postId ? { ...post, comments: [...post.comments, `${'doc1'}: ${comment}`] } : post
+      );
+      setPosts(updatedPosts);
+      socket.emit('commentPost', { postId, user: 'doc1', comment });
+    } catch (error) {
+      console.error('Error commenting on post:', error);
+      setError(`Error commenting on post: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-200 flex font-sans">
+      {error && (
+        <div className="alert alert-error p-3 rounded-lg shadow-md mb-4 bg-red-900 text-red-300 fixed top-4 left-1/2 transform -translate-x-1/2">
+          <span className="font-medium">{error}</span>
+          <button
+            onClick={() => setError('')}
+            className="ml-2 text-red-200 hover:text-red-100"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div className="w-72 bg-gray-800 p-4 h-screen fixed shadow-lg rounded-r-xl border-r border-gray-700">
         <h2 className="text-2xl font-bold mb-6 text-white text-center font-inter">HealthSync AI</h2>
         <nav className="space-y-3">
@@ -690,15 +756,15 @@ function Dashboard({ token }) {
         ) : selectedCommunity ? (
           <div className="card bg-gray-800 p-4 rounded-lg shadow-2xl border border-gray-700">
             <h2 className="text-xl font-semibold mb-4 text-white">
-              {selectedCommunity.type === 'Global' ? t('globalCommunityServer') : selectedCommunity.type === 'Local' ? t('privateCommunityServer') : t('topDoctors')} - {selectedCommunity?.name || 'Top Doctors'}
+              {selectedCommunity?.type === 'Global' ? t('globalCommunityServer') : selectedCommunity?.type === 'Local' ? t('privateCommunityServer') : t('topDoctors')} - {selectedCommunity?.name || 'Top Doctors'}
             </h2>
-            {selectedCommunity.type && (
+            {selectedCommunity?.type && (
               <div className="mt-4">
-                <h3 className="text-lg font-medium mb-2 text-gray-200">{t('members')} ({selectedCommunity.members.length})</h3>
+                <h3 className="text-lg font-medium mb-2 text-gray-200">{t('members')} ({selectedCommunity.members?.length || 0})</h3>
                 <ul className="list-disc pl-5 mb-4 text-gray-300">
-                  {selectedCommunity.members.slice(0, 5).map((member, idx) => (
+                  {selectedCommunity.members?.slice(0, 5).map((member, idx) => (
                     <li key={idx} className="text-gray-300">{member.username || member}</li>
-                  ))}
+                  )) || <li>No members available</li>}
                 </ul>
                 <h3 className="text-lg font-medium mb-2 text-gray-200">{t('channels')}</h3>
                 <div className="space-y-3">
@@ -716,7 +782,7 @@ function Dashboard({ token }) {
                   {posts.map((post) => (
                     <div key={post.id} className="bg-gray-700 p-4 rounded-lg shadow-md border border-gray-600">
                       <p className="text-gray-200 font-medium"><strong>{post.author}</strong>: {post.content}</p>
-                      {post.imageUrl && <img src={post.imageUrl} alt={post.content} className="mt-2 w-full rounded-lg h-48 object-cover" />}
+                      {post.imageUrl && <img src={post.imageUrl} alt={post.content} className="mt-2 w-full rounded-lg h-48 object-cover" onError={(e) => { e.target.style.display = 'none'; }} />}
                       <div className="mt-2 flex justify-between text-gray-400">
                         <button onClick={() => handleLikePost(post.id)} className="btn btn-sm btn-blue text-white hover:bg-blue-700">
                           {t('like')} ({post.likes})
@@ -872,11 +938,11 @@ function Dashboard({ token }) {
                     <p className="text-sm">{t('days')}: {healthForecast[selectedPatient].days || 30}</p>
                   </div>
                 )}
-                {availableScheme && (
+                {availableScheme[selectedPatient] && (
                   <div className="mt-4 p-3 bg-gray-700 rounded-lg text-gray-200">
                     <h3 className="text-md font-medium text-blue-400">{t('recommendedScheme')}</h3>
                     <p className="text-sm text-gray-300">
-                      <strong>{availableScheme.name}</strong>: {availableScheme.description} (Eligibility: {availableScheme.eligibility})
+                      <strong>{availableScheme[selectedPatient].name}</strong>: {availableScheme[selectedPatient].description} (Eligibility: {availableScheme[selectedPatient].eligibility})
                     </p>
                   </div>
                 )}
@@ -911,7 +977,7 @@ function Dashboard({ token }) {
               <div className="h-40 rounded-lg overflow-hidden bg-gray-900">
                 <D3Chart data={Object.values(patientsData).flat().slice(-10)} />
               </div>
-              <div id="plotlyChart" className="mt-2 h-40 rounded-lg overflow-hidden bg-gray-900"></div>
+              <div ref={plotlyChartRef} id="plotlyChart" className="mt-2 h-40 rounded-lg overflow-hidden bg-gray-900"></div>
             </div>
 
             {/* Leaderboard */}
