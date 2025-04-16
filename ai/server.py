@@ -1,51 +1,52 @@
-import numpy as np
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-from flask import Flask, request, jsonify
+    require('dotenv').config();
+    const express = require('express');
+    const { Server } = require('socket.io');
+    const nodemailer = require('nodemailer');
+    const app = express();
 
-app = Flask(__name__)
+    const port = 5000;
 
-# Define and train a simple LSTM model for anomaly detection
-def create_model():
-    model = Sequential([
-        LSTM(50, activation='relu', input_shape=(10, 4), return_sequences=False),  # 10 timesteps, 4 features
-        Dense(1, activation='sigmoid')  # Output: anomaly probability (0-1)
-    ])
-    model.compile(optimizer='adam', loss='binary_crossentropy')
-    
-    # Dummy training data (replace with real data in production)
-    X_train = np.random.rand(100, 10, 4)  # 100 samples, 10 timesteps, 4 features (HR, SpO2, RR, Temp)
-    y_train = np.random.randint(0, 2, 100)  # Binary labels (0 = normal, 1 = anomaly)
-    model.fit(X_train, y_train, epochs=5, batch_size=32, verbose=0)
-    return model
+    // Socket.IO setup
+    const server = app.listen(port, () => console.log(`Server running on port ${port}`));
+    const io = new Server(server, {
+    cors: { origin: 'http://localhost:3000', methods: ['GET', 'POST'] },
+    });
 
-# Initialize the model
-model = create_model()
+    io.on('connection', (socket) => {
+    console.log(`Client connected: ${socket.id}`);
+    socket.on('disconnect', () => console.log(`Client disconnected: ${socket.id}`));
+    socket.on('notifyDoctor', (data) => {
+        sendEmail(data.patientId, data.doctorEmail);
+    });
+    });
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    try:
-        # Get vitals data from the request
-        data = request.json
-        heart_rate = data.get('heartRate')
-        spO2 = data.get('spO2')
-        respiration_rate = data.get('respirationRate')
-        temperature = data.get('temperature')
+    // Email configuration
+    const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER, // e.g., your-email@gmail.com
+        pass: process.env.EMAIL_PASS, // App Password or password
+    },
+    });
 
-        # Validate input
-        if not all([heart_rate, spO2, respiration_rate, temperature]):
-            return jsonify({'error': 'Missing required vitals data'}), 400
+    const sendEmail = async (patientId, doctorEmail) => {
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: doctorEmail || 'doctor@example.com',
+        subject: `Urgent: Patient ${patientId} Update`,
+        text: `Dear Doctor,\n\nAn update is available for Patient ${patientId}. Please check the dashboard for details.\n\nBest,\nMedSync AI Team`,
+    };
 
-        # Prepare input for LSTM (repeat single data point to simulate 10 timesteps)
-        vitals = np.array([[heart_rate, spO2, respiration_rate, temperature]])
-        input_data = np.repeat(vitals, 10, axis=0).reshape(1, 10, 4)
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`Email sent to ${doctorEmail} for Patient ${patientId}`);
+    } catch (error) {
+        console.error(`Failed to send email to ${doctorEmail} for Patient ${patientId}`, error);
+    }
+    };
 
-        # Predict anomaly score
-        anomaly_score = model.predict(input_data, verbose=0)[0][0]
-        return jsonify({'anomalyScore': float(anomaly_score)})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    // Example API endpoint (optional)
+    app.get('/api/test-email', (req, res) => {
+    sendEmail('patient1', 'doctor@example.com');
+    res.send('Email test initiated');
+    });

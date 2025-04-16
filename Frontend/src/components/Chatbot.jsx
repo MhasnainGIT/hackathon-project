@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../node_modules/react-i18next';
 import axios from 'axios';
 import Modal from 'react-modal';
 import Plotly from 'plotly.js-dist';
